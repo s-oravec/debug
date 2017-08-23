@@ -1,0 +1,14 @@
+{
+  "name": "debug",
+  "version": "0.1.0",
+  "description": "filtered and pretty debug info",
+  "author" : "Štefan Oravec <stefan.oravec@me.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/s-oravec/debug.git"
+  },
+  "keywords": [
+    "SQL", "SQL*Plus", "SQL Plus", "SQLcl", "Oracle"
+  ]
+}
