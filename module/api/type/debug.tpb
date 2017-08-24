@@ -14,8 +14,19 @@ create or replace type body debug is
         namespace in varchar2
     ) return self as result is
     begin
-        self.namespace := namespace;        
-        self.enabled := debug_impl.is_enabled(namespace);
+        --
+        if regexp_like(namespace, '%|\*|\\|,') then
+            raise_application_error(-20000, 'Invalid characters in namespace name. "%*\"');
+        end if;
+        --
+        self.namespace := namespace;
+        --
+        debug_impl.register_namespace(namespace);
+        --
+        self.color     := debug_impl.select_color(namespace);
+        self.enabled   := debug_impl.is_enabled(namespace);
+        self.prev_tick := systimestamp;
+        --
         return;
     end;
 
@@ -25,8 +36,36 @@ create or replace type body debug is
     ) is
     begin
         if self.enabled = debug_impl.BOOLEAN_TRUE then
-           dbms_output.put_line(self.namespace || ' ' || value);
-        end if;  
+            if debug_impl.use_colors then
+                dbms_output.put_line(
+                    ' '
+                    || debug_impl.color_string(self.namespace, self.color)
+                    || ' '
+                    || value
+                    || ' '
+                    || debug_impl.color_string(debug_impl.humanize(self.diff), self.color)
+                );
+            else
+                dbms_output.put_line(
+                    replace(to_char(systimestamp, 'YYYY-MM-DD HH24:MI:SS.FF3'), ' ', 'T')
+                    || ' '
+                    || self.namespace
+                    || ' '
+                    || value
+                );
+            end if;
+        end if;
+    end;
+
+    ----------------------------------------------------------------------------
+    member function diff(self in out nocopy debug) return interval day to second
+    is
+        now    timestamp := systimestamp;
+        result interval day (9) to second (6);
+    begin
+        result := now - self.prev_tick;
+        self.prev_tick := now;
+        return result;
     end;
 
 end;

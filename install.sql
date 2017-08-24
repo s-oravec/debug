@@ -24,7 +24,19 @@ prompt Installing package API
 prompt Granting privileges on package API
 @module/api/grant_&&l_privileges..sql
 
-show error
+prompt Selecting errors in &&g_current_schema schema
+
+set lines 200
+column location format a40
+column text     format a60 word_wrapped
+
+set feedback on
+select owner || '.' || name as location, text
+  from all_errors
+ where owner = upper('&&g_current_schema')
+ order by 1, sequence, line, position
+;
+set feedback off
 
 rem undefine locals
 undefine l_privileges
