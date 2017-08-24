@@ -5,6 +5,7 @@ create or replace package debug_impl as
     BOOLEAN_FALSE constant typ_Boolean := 'N';
 
     subtype typ_Colors is varchar2(30);
+    subtype typ_Color  is pls_integer;
 
     COLORS_NO  constant typ_Colors := 'NO';
     COLORS_16  constant typ_Colors := '16_COLORS';
@@ -18,30 +19,39 @@ create or replace package debug_impl as
     subtype typ_Namespace is varchar2(4000);
 
     procedure init (
-        filter in varchar2,
-        colors in varchar2
+        a_filter  in typ_Filter,
+        a_colors  in typ_Colors
     );
+
+    function init_persistent (
+        a_filter  in typ_Filter,
+        a_colors  in typ_Colors,
+        a_session in debug_session.id_debug_session%type
+    ) return debug_session.id_debug_session%type;
 
     function use_colors return boolean;
 
     procedure register_namespace (
-        namespace in varchar2
+        a_namespace in typ_Namespace
     );
 
     function is_enabled (
-        namespace in varchar2
+        a_namespace in typ_Namespace
     ) return typ_Boolean;
 
-    function select_color(namespace in varchar2) return pls_integer;
+    function select_color(a_namespace in typ_Namespace) return typ_Color;
 
     function color_string (
-        str   in varchar2,
-        color in pls_integer
+        a_str   in varchar2,
+        a_color in typ_Color
     ) return varchar2;
 
-    function humanize (
-        dsinterval interval day to second
-    ) return varchar2;
+    procedure log (
+        a_namespace in typ_Namespace,
+        a_value     in varchar2,
+        a_color     in typ_Color,
+        a_diff      in interval day to second
+    );
 
 end;
 /

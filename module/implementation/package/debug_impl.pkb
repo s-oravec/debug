@@ -19,41 +19,91 @@ create or replace package body debug_impl as
     );
     -- NoFormat End
 
-    g_filter debug_impl.typ_Filter;
-    g_colors typ_ColorsTable := typ_ColorsTable();
+    g_filter  typ_Filter;
+    g_session debug_session.id_debug_session%type;
+    g_colors  typ_ColorsTable := typ_ColorsTable();
 
-    type typ_Namespaces is table of debug_impl.typ_Namespace;
+    type typ_Namespaces is table of typ_Namespace;
     g_enabled_namespaces    typ_Namespaces;
 
     ----------------------------------------------------------------------------
-    function parse_namespaces(value in varchar2) return typ_Namespaces
+    function parse_namespaces(a_value in varchar2) return typ_Namespaces
     is
         l_result typ_Namespaces := typ_Namespaces();
     begin
-        if value is not null then
-            for idx in 1 .. nvl(length(regexp_replace(value, '[^,]')),0) + 1 loop
+        if a_value is not null then
+            for idx in 1 .. nvl(length(regexp_replace(a_value, '[^,]')),0) + 1 loop
                 l_result.extend();
-                l_result(l_result.last) := replace(regexp_substr(value, '[^,]+', 1, idx), '*', '%');
+                l_result(l_result.last) := replace(regexp_substr(a_value, '[^,]+', 1, idx), '*', '%');
             end loop;
         end if;
         return l_result;
     end;
 
     ----------------------------------------------------------------------------
-    procedure init (
-        filter in varchar2,
-        colors in varchar2
+    procedure init_impl (
+        a_filter  in typ_Filter,
+        a_colors  in typ_Colors,
+        a_session in debug_session.id_debug_session%type
     ) is
     begin
-        g_filter := filter;
-        g_enabled_namespaces := parse_namespaces(filter);
-        if colors = COLORS_NO then
-            g_colors := typ_ColorsTable();
-        elsif colors = COLORS_16 then
-            g_colors := gc_16_COLORS_TAB;
-        elsif colors = COLORS_256 then
-            g_colors := gc_256_COLORS_TAB;
-        end if;
+        g_session := a_session;
+        g_filter  := a_filter;
+        g_enabled_namespaces := parse_namespaces(a_filter);
+        case a_colors
+            when COLORS_16 then g_colors := gc_16_COLORS_TAB;
+            when COLORS_256 then g_colors := gc_256_COLORS_TAB;
+            else g_colors := typ_ColorsTable();
+        end case;
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure init (
+        a_filter  in typ_Filter,
+        a_colors  in typ_Colors
+    ) is
+    begin
+        init_impl(a_filter, a_colors, null);
+    end;
+
+    ----------------------------------------------------------------------------
+    function init_persistent (
+        a_filter  in typ_Filter,
+        a_colors  in typ_Colors,
+        a_session in debug_session.id_debug_session%type
+    ) return debug_session.id_debug_session%type
+    is
+        pragma autonomous_transaction;
+        l_result debug_session.id_debug_session%type;
+        l_filter typ_Filter := a_filter;
+        l_colors typ_Colors := a_colors;
+    begin
+        --
+        begin
+            if a_session is not null then
+                select filter, colors, id_debug_session
+                  into l_filter, l_colors, l_result
+                  from debug_session
+                 where id_debug_session = a_session;
+            else
+                insert into debug_session
+                values (debug_session_id.nextval, a_filter, a_colors)
+                returning id_debug_session, a_filter, a_colors into l_result, l_filter, l_colors;
+            end if;
+        exception
+            when no_data_found then
+                raise_application_error(-20000, 'Session with id ' || a_session || ' not found');
+        end;
+        --
+        init_impl(l_filter, l_colors, l_result);
+        commit;
+        --
+        return l_result;
+        --
+    exception
+        when others then
+            rollback;
+            raise;
     end;
 
     ----------------------------------------------------------------------------
@@ -64,56 +114,56 @@ create or replace package body debug_impl as
     end;
 
     ----------------------------------------------------------------------------
-    function to_binary_integer(value in integer) return binary_integer is
+    function to_binary_integer(a_value in integer) return binary_integer is
         -- for signed 32 bit integer
-        max_positive constant pls_integer := power(2, 31) - 1;
-        min_negative constant pls_integer := - power(2, 31);
+        MAX_POSITIVE constant pls_integer := power(2, 31) - 1;
+        MIN_NEGATIVE constant pls_integer := - power(2, 31);
     begin
-        if value between min_negative and max_positive then
-            return value;
-        elsif value > max_positive then
-            return to_binary_integer(min_negative + (value - max_positive) - 1);
-        elsif value < min_negative then
-            return to_binary_integer(max_positive + value - min_negative + 1);
+        if a_value between MIN_NEGATIVE and MAX_POSITIVE then
+            return a_value;
+        elsif a_value > MAX_POSITIVE then
+            return to_binary_integer(MIN_NEGATIVE + (a_value - MAX_POSITIVE) - 1);
+        elsif a_value < MIN_NEGATIVE then
+            return to_binary_integer(MAX_POSITIVE + a_value - MIN_NEGATIVE + 1);
         else
             return null;
         end if;
     end;
 
     ----------------------------------------------------------------------------
-    function fake_shl(value in pls_integer, positions in pls_integer) return pls_integer
+    function fake_shl(a_value in pls_integer, a_positions in pls_integer) return pls_integer
     is
     begin
         -- just make it simple, doesn't have to be precise
-        if nvl(value, 0) = 0 then
-            return value;
-        elsif sign(value) = 1 then
-            return mod(cast(value as integer) * power(2, positions), power(2, 31) - 1);
+        if nvl(a_value, 0) = 0 then
+            return a_value;
+        elsif sign(a_value) = 1 then
+            return mod(cast(a_value as integer) * power(2, a_positions), power(2, 31) - 1);
         else
-            return mod(cast(value as integer) * power(2, positions), power(2, 31));
+            return mod(cast(a_value as integer) * power(2, a_positions), power(2, 31));
         end if;
     end;
 
     ----------------------------------------------------------------------------
-    function select_color(namespace in varchar2) return pls_integer
+    function select_color(a_namespace in typ_Namespace) return typ_Color
     is
-        hash pls_integer := 0;
+        l_hash pls_integer := 0;
     begin
         if not use_colors then
             return -1;
         else
-            for idx in 1 .. length(namespace) loop
-                hash := fake_shl(hash, 5) - hash + ascii(substr(namespace, idx, 1));
+            for l_idx in 1 .. length(a_namespace) loop
+                l_hash := fake_shl(l_hash, 5) - l_hash + ascii(substr(a_namespace, l_idx, 1));
                 -- convert to 32bit integer if overflows
-                hash := to_binary_integer(hash);
+                l_hash := to_binary_integer(l_hash);
             end loop;
-            return g_colors(mod(abs(hash), g_colors.count) + 1);
+            return g_colors(mod(abs(l_hash), g_colors.count) + 1);
         end if;
     end;
 
     ----------------------------------------------------------------------------
     procedure register_namespace (
-        namespace in varchar2
+        a_namespace in typ_Namespace
     ) is
     begin
         null;
@@ -121,68 +171,137 @@ create or replace package body debug_impl as
 
     ----------------------------------------------------------------------------
     function is_enabled (
-        namespace in varchar2
+        a_namespace in typ_Namespace
     ) return typ_Boolean is
     begin
-        for idx in 1 .. g_enabled_namespaces.count loop
-            if namespace like g_enabled_namespaces(idx) then
-                return debug_impl.BOOLEAN_TRUE;
+        for l_idx in 1 .. g_enabled_namespaces.count loop
+            if a_namespace like g_enabled_namespaces(l_idx) then
+                return BOOLEAN_TRUE;
             end if;
         end loop;
-        return debug_impl.BOOLEAN_FALSE;
+        return BOOLEAN_FALSE;
     end;
 
     ----------------------------------------------------------------------------
     function ternary_operator (
         boolean_expression in boolean,
-        value_when_true    in varchar2,
-        value_when_false   in varchar2
+        a_value_when_true    in varchar2,
+        a_value_when_false   in varchar2
     ) return varchar2
     is
     begin
         if boolean_expression then
-            return value_when_true;
+            return a_value_when_true;
         else
-            return value_when_false;
+            return a_value_when_false;
         end if;
     end;
 
     ----------------------------------------------------------------------------
     function color_string (
-        str   in varchar2,
-        color in pls_integer
+        a_str   in varchar2,
+        a_color in typ_Color
     ) return varchar2
     is
     begin
         if not use_colors then
-            return str;
+            return a_str;
         else
-            return chr(27) || '[3' || ternary_operator(color < 8, color, '8;5;' || color) || 'm'
-                || str
+            return chr(27) || '[3' || ternary_operator(a_color < 8, a_color, '8;5;' || a_color) || 'm'
+                || a_str
                 || chr(27) || '[0m';
         end if;
     end;
 
     ----------------------------------------------------------------------------
     function humanize (
-        dsinterval interval day to second
+        a_dsinterval interval day to second
     ) return varchar2
     is
     begin
-        if dsinterval < numtodsinterval(1, 'second') / 1000 then
+        if a_dsinterval < numtodsinterval(1, 'second') / 1000 then
             return '+0ms';
-        elsif dsinterval < numtodsinterval(1, 'second') then
-            return '+' || (1000 * to_number('0.' || substr(regexp_substr(to_char(dsinterval), '[^\.]+', 1, 2), 1, 12))) || 'ms';
-        elsif dsinterval < numtodsinterval(1, 'minute') then
-            return '+' || ltrim(substr(regexp_substr(to_char(dsinterval), '[^:]+', 1, 3), 1, 6), '0') || 's';
-        elsif dsinterval < numtodsinterval(1, 'hour') then
-            return '+' || ltrim(substr(regexp_substr(to_char(dsinterval), '[^ ]+', 1, 2), 4, 7), '0') || 'min';
+        elsif a_dsinterval < numtodsinterval(1, 'second') then
+            return '+' || (1000 * to_number('0.' || substr(regexp_substr(to_char(a_dsinterval), '[^\.]+', 1, 2), 1, 12))) || 'ms';
+        elsif a_dsinterval < numtodsinterval(1, 'minute') then
+            return '+' || ltrim(substr(regexp_substr(to_char(a_dsinterval), '[^:]+', 1, 3), 1, 6), '0') || 's';
+        elsif a_dsinterval < numtodsinterval(1, 'hour') then
+            return '+' || ltrim(substr(regexp_substr(to_char(a_dsinterval), '[^ ]+', 1, 2), 4, 7), '0') || 'min';
         else
-            return '+' || ltrim(substr(regexp_substr(to_char(dsinterval), '[^ ]+', 1, 2), 1, 8),'0') || 'h';
+            return '+' || ltrim(substr(regexp_substr(to_char(a_dsinterval), '[^ ]+', 1, 2), 1, 8),'0') || 'h';
+        end if;
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure log_to_dbms_output (
+        a_namespace in typ_Namespace,
+        a_value     in varchar2,
+        a_color     in typ_Color,
+        a_diff      in interval day to second
+    ) is
+    begin
+        if use_colors then
+            dbms_output.put_line(
+                ' '
+                || color_string(a_namespace, a_color)
+                || ' '
+                || a_value
+                || ' '
+                || color_string(humanize(a_diff), a_color)
+            );
+        else
+            dbms_output.put_line(
+                replace(to_char(systimestamp, 'YYYY-MM-DD HH24:MI:SS.FF3'), ' ', 'T')
+                || ' '
+                || a_namespace
+                || ' '
+                || a_value
+            );
+        end if;
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure log_to_persistent_storage (
+        a_namespace in typ_Namespace,
+        a_value     in varchar2,
+        a_color     in typ_Color,
+        a_diff      in interval day to second
+    ) is
+        pragma autonomous_transaction ;
+    begin
+        insert
+          into debug_log
+        values (
+            debug_log_id.nextval,
+            g_session,
+            a_namespace,
+            a_value,
+            a_color,
+            a_diff
+        );
+        commit;
+    exception
+        when others then
+            rollback;
+            raise;
+    end;
+
+    ----------------------------------------------------------------------------
+    procedure log (
+        a_namespace in typ_Namespace,
+        a_value     in varchar2,
+        a_color     in typ_Color,
+        a_diff      in interval day to second
+    ) is
+    begin
+        if g_session is null then
+            log_to_dbms_output(a_namespace, a_value, a_color, a_diff);
+        else
+            log_to_persistent_storage(a_namespace, a_value, a_color, a_diff);
         end if;
     end;
 
 begin
-    init(debug_impl.FILTER_DEFAULT, debug_impl.COLORS_NO);
+    init(FILTER_DEFAULT, COLORS_NO);
 end;
 /

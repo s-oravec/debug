@@ -1,0 +1,10 @@
+create table debug_session (
+    id_debug_session integer not null,
+    filter           varchar2(4000) not null,
+    colors           varchar2(4000) not null
+);
+
+alter table debug_session
+    add constraint debug_session_pk
+    primary key (id_debug_session)
+;

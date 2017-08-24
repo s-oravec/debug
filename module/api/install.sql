@@ -1,3 +1,4 @@
+prompt .. Creating package debug_api
 @@package/debug_api.pks
 
 prompt .. Creating type debug

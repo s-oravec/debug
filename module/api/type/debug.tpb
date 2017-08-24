@@ -1,12 +1,23 @@
 create or replace type body debug is
 
     ----------------------------------------------------------------------------
-    static procedure init(
-        filter in varchar2 default '*',
-        colors in varchar2 default '16_COLORS'
+    static procedure init (
+        filter  in varchar2 default '*',
+        colors  in varchar2 default '16_COLORS'
     ) is
     begin
         debug_impl.init(filter, colors);
+    end;
+
+    ----------------------------------------------------------------------------
+    static function init_persistent (
+        filter  in varchar2 default '*',         -- debug_api.ALL_NAMESPACES
+        colors  in varchar2 default '16_COLORS', -- debug_api.COLORS_16
+        session in integer default null
+    ) return integer
+    is
+    begin
+        return debug_impl.init_persistent(filter, colors, session);
     end;
 
     ----------------------------------------------------------------------------
@@ -36,24 +47,7 @@ create or replace type body debug is
     ) is
     begin
         if self.enabled = debug_impl.BOOLEAN_TRUE then
-            if debug_impl.use_colors then
-                dbms_output.put_line(
-                    ' '
-                    || debug_impl.color_string(self.namespace, self.color)
-                    || ' '
-                    || value
-                    || ' '
-                    || debug_impl.color_string(debug_impl.humanize(self.diff), self.color)
-                );
-            else
-                dbms_output.put_line(
-                    replace(to_char(systimestamp, 'YYYY-MM-DD HH24:MI:SS.FF3'), ' ', 'T')
-                    || ' '
-                    || self.namespace
-                    || ' '
-                    || value
-                );
-            end if;
+            debug_impl.log(self.namespace, value, self.color, self.diff);
         end if;
     end;
 

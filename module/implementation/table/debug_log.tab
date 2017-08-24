@@ -1,0 +1,21 @@
+create table debug_log (
+    id_debug_log     integer not null,
+    id_debug_session integer not null,
+    namespace        varchar2(4000),
+    value            varchar2(4000),
+    color            integer,
+    diff             interval day to second (6)
+);
+
+alter table debug_log
+    add constraint debug_log_pk
+    primary key (id_debug_log)
+;
+
+alter table debug_log
+    add constraint debug_log_session_fk
+    foreign key (id_debug_session) references debug_session(id_debug_session)
+;
+
+create index debug_log_session_fk on debug_log(id_debug_session)
+;

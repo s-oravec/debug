@@ -13,8 +13,10 @@ end;
 set serveroutput on size unlimited
 set feedback on
 
+declare
+    l_session pls_integer ;
 BEGIN
-    debug.init('worker:*', debug_impl.COLORS_256);
+    l_session := debug.init_persistent('worker:*', debug_impl.COLORS_256);
 END;
 /
 

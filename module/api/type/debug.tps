@@ -1,14 +1,20 @@
 create or replace type debug as object
 (
     namespace varchar2(255),
-    color     integer, -- private
-    enabled   varchar2(1),   -- private
+    color     integer,
+    enabled   varchar2(1),
     prev_tick timestamp,
 
     static procedure init (
-        filter in varchar2 default '*',        -- debug_api.ALL_NAMESPACES
-        colors in varchar2 default '16_COLORS' -- debug_api.COLORS_16
+        filter  in varchar2 default '*',         -- debug_api.ALL_NAMESPACES
+        colors  in varchar2 default '16_COLORS' -- debug_api.COLORS_16
     ),
+
+    static function init_persistent (
+        filter  in varchar2 default '*',         -- debug_api.ALL_NAMESPACES
+        colors  in varchar2 default '16_COLORS', -- debug_api.COLORS_16
+        session in integer default null
+    ) return integer,
 
     constructor function debug(
         namespace in varchar2
