@@ -18,28 +18,63 @@ create or replace package body debug_impl as
         205, 206, 207, 208, 209, 214, 215, 220, 221
     );
     -- NoFormat End
+    g_colors_table  typ_ColorsTable := typ_ColorsTable();
 
     g_filter  typ_Filter;
+    g_colors  typ_Colors;
     g_session debug_session.id_debug_session%type;
-    g_colors  typ_ColorsTable := typ_ColorsTable();
 
-    type typ_Namespaces is table of typ_Namespace;
-    g_enabled_namespaces    typ_Namespaces;
+    type typ_Filters is table of typ_Filter;
+    g_enabled_filters    typ_Filters;
 
+    type typ_DebugObjects is table of debug;
+    g_registered_debug_objects typ_DebugObjects := typ_DebugObjects();
+
+
+    -- disables all debug objects
     ----------------------------------------------------------------------------
-    function parse_namespaces(a_value in varchar2) return typ_Namespaces
-    is
-        l_result typ_Namespaces := typ_Namespaces();
+    procedure disable_debug_objects is
     begin
-        if a_value is not null then
-            for idx in 1 .. nvl(length(regexp_replace(a_value, '[^,]')),0) + 1 loop
-                l_result.extend();
-                l_result(l_result.last) := replace(regexp_substr(a_value, '[^,]+', 1, idx), '*', '%');
-            end loop;
-        end if;
-        return l_result;
+        for idx in 1 .. g_registered_debug_objects.count loop
+            g_registered_debug_objects(idx).disable;
+        end loop;
     end;
 
+    -- enables debug objects which namespace matches filter
+    ----------------------------------------------------------------------------
+    procedure enable_debug_objects_matching(a_filter in typ_Filter)
+    is
+    begin
+        for idx in 1 .. g_registered_debug_objects.count loop
+            if g_registered_debug_objects(idx).namespace like a_filter then
+                g_registered_debug_objects(idx).enable;
+            end if;
+        end loop;
+    end;
+
+    -- parse filter and apply new settings on registered debug objects
+    ----------------------------------------------------------------------------
+    procedure parse_and_apply_filter(a_filter in typ_Filter)
+    is
+    begin
+        -- reset settings
+        g_enabled_filters := typ_Filters();
+        disable_debug_objects;
+        -- parse and apply new
+        if a_filter is not null then
+            for idx in 1 .. nvl(length(regexp_replace(a_filter, '[^,]')),0) + 1 loop
+                -- append
+                g_enabled_filters.extend();
+                g_enabled_filters(g_enabled_filters.last) := replace(regexp_substr(a_filter, '[^,]+', 1, idx), '*', '%');
+                -- apply
+                if g_registered_debug_objects.count > 0 then
+                    enable_debug_objects_matching(g_enabled_filters(g_enabled_filters.last));
+                end if;
+            end loop;
+        end if;
+    end;
+
+    -- init implementation
     ----------------------------------------------------------------------------
     procedure init_impl (
         a_filter  in typ_Filter,
@@ -47,53 +82,50 @@ create or replace package body debug_impl as
         a_session in debug_session.id_debug_session%type
     ) is
     begin
-        g_session := a_session;
+        --
         g_filter  := a_filter;
-        g_enabled_namespaces := parse_namespaces(a_filter);
+        g_colors  := a_colors;
+        g_session := a_session;
+        --
         case a_colors
-            when COLORS_16 then g_colors := gc_16_COLORS_TAB;
-            when COLORS_256 then g_colors := gc_256_COLORS_TAB;
-            else g_colors := typ_ColorsTable();
+            when COLORS_16 then g_colors_table := gc_16_COLORS_TAB;
+            when COLORS_256 then g_colors_table := gc_256_COLORS_TAB;
+            else g_colors_table := typ_ColorsTable();
         end case;
+        --
+        g_registered_debug_objects := typ_DebugObjects();
+        parse_and_apply_filter(a_filter);
+        --
     end;
 
+    -- init for use within session initializing
     ----------------------------------------------------------------------------
-    procedure init (
+    procedure init_session (
         a_filter  in typ_Filter,
         a_colors  in typ_Colors
     ) is
+        l_filter typ_Filter := nvl(a_filter, FILTER_ALL_NAMESPACES);
+        l_colors typ_Colors := nvl(a_colors, COLORS_256);
     begin
-        init_impl(a_filter, a_colors, null);
+        init_impl(l_filter, l_colors, null);
     end;
 
+    -- multisession use requires persistence
     ----------------------------------------------------------------------------
     function init_persistent (
         a_filter  in typ_Filter,
-        a_colors  in typ_Colors,
-        a_session in debug_session.id_debug_session%type
+        a_colors  in typ_Colors
     ) return debug_session.id_debug_session%type
     is
         pragma autonomous_transaction;
         l_result debug_session.id_debug_session%type;
-        l_filter typ_Filter := a_filter;
-        l_colors typ_Colors := a_colors;
+        l_filter typ_Filter := nvl(a_filter, FILTER_ALL_NAMESPACES);
+        l_colors typ_Colors := nvl(a_colors, COLORS_256);
     begin
         --
-        begin
-            if a_session is not null then
-                select filter, colors, id_debug_session
-                  into l_filter, l_colors, l_result
-                  from debug_session
-                 where id_debug_session = a_session;
-            else
-                insert into debug_session
-                values (debug_session_id.nextval, a_filter, a_colors)
-                returning id_debug_session, a_filter, a_colors into l_result, l_filter, l_colors;
-            end if;
-        exception
-            when no_data_found then
-                raise_application_error(-20000, 'Session with id ' || a_session || ' not found');
-        end;
+        insert into debug_session
+        values (debug_session_id.nextval, l_filter, l_colors)
+        returning id_debug_session into l_result;
         --
         init_impl(l_filter, l_colors, l_result);
         commit;
@@ -106,13 +138,52 @@ create or replace package body debug_impl as
             raise;
     end;
 
+    -- join existing persistent debug session > init this with existing values
+    ----------------------------------------------------------------------------
+    procedure join_persistent (
+        a_id_debug_session in debug_session.id_debug_session%type
+    ) is
+        l_filter typ_Filter;
+        l_colors typ_Colors;
+    begin
+        select filter, colors
+          into l_filter, l_colors
+          from debug_session
+         where id_debug_session = a_id_debug_session;
+        init_impl(l_filter, l_colors, a_id_debug_session);
+    end;
+
+    -- change filter after init
+    -- either in this session or specified persistent session
+    ----------------------------------------------------------------------------
+    procedure set_filter (
+        a_filter           in typ_Filter,
+        a_id_debug_session in debug_session.id_debug_session%type default null
+    ) is
+        pragma autonomous_transaction;
+    begin
+        parse_and_apply_filter(a_filter);
+        if a_id_debug_session is not null then
+            update debug_session
+               set filter = a_filter
+             where id_debug_session = a_id_debug_session;
+        end if;
+        commit;
+    exception
+        when others then
+            rollback;
+            raise;
+    end;
+
+    -- hides this ugliness
     ----------------------------------------------------------------------------
     function use_colors return boolean
     is
     begin
-        return g_colors.count > 0;
+        return g_colors_table.count > 0;
     end;
 
+    -- convert integer to signed 32bit integer = binary_integer
     ----------------------------------------------------------------------------
     function to_binary_integer(a_value in integer) return binary_integer is
         -- for signed 32 bit integer
@@ -130,6 +201,7 @@ create or replace package body debug_impl as
         end if;
     end;
 
+    -- supersimplified shift left operator
     ----------------------------------------------------------------------------
     function fake_shl(a_value in pls_integer, a_positions in pls_integer) return pls_integer
     is
@@ -144,6 +216,7 @@ create or replace package body debug_impl as
         end if;
     end;
 
+    -- hash namespace value to color from colors colorspace
     ----------------------------------------------------------------------------
     function select_color(a_namespace in typ_Namespace) return typ_Color
     is
@@ -157,62 +230,69 @@ create or replace package body debug_impl as
                 -- convert to 32bit integer if overflows
                 l_hash := to_binary_integer(l_hash);
             end loop;
-            return g_colors(mod(abs(l_hash), g_colors.count) + 1);
+            return g_colors_table(mod(abs(l_hash), g_colors_table.count) + 1);
         end if;
     end;
 
+    -- register
     ----------------------------------------------------------------------------
-    procedure register_namespace (
-        a_namespace in typ_Namespace
+    procedure register_debug_object (
+        a_debug in debug
     ) is
     begin
-        null;
+        g_registered_debug_objects.extend();
+        g_registered_debug_objects(g_registered_debug_objects.last) := a_debug;
     end;
 
+    -- checks enabled filters
     ----------------------------------------------------------------------------
     function is_enabled (
         a_namespace in typ_Namespace
-    ) return typ_Boolean is
+    ) return typ_CharBool is
     begin
-        for l_idx in 1 .. g_enabled_namespaces.count loop
-            if a_namespace like g_enabled_namespaces(l_idx) then
-                return BOOLEAN_TRUE;
+        for l_idx in 1 .. g_enabled_filters.count loop
+            if a_namespace like g_enabled_filters(l_idx) then
+                return CHARBOOL_TRUE;
             end if;
         end loop;
-        return BOOLEAN_FALSE;
+        return CHARBOOL_FALSE;
     end;
 
+    -- ternary operator (as seen elsewhere ...) - for varchar2
+    -- no special null treatment of of a_boolean_expression
     ----------------------------------------------------------------------------
     function ternary_operator (
-        boolean_expression in boolean,
+        a_boolean_expression in boolean,
         a_value_when_true    in varchar2,
         a_value_when_false   in varchar2
     ) return varchar2
     is
     begin
-        if boolean_expression then
+        if a_boolean_expression then
             return a_value_when_true;
         else
             return a_value_when_false;
         end if;
     end;
 
+    -- apply color to string
     ----------------------------------------------------------------------------
-    function color_string (
-        a_str   in varchar2,
-        a_color in typ_Color
+    function apply_color (
+        a_string in varchar2,
+        a_color  in typ_Color
     ) return varchar2
     is
     begin
         if not use_colors then
-            return a_str;
+            return a_string;
         else
             return chr(27) || '[3' || ternary_operator(a_color < 8, a_color, '8;5;' || a_color) || 'm'
-                || a_str
+                || a_string
                 || chr(27) || '[0m';
         end if;
     end;
 
+    -- humanize day to second inteerval
     ----------------------------------------------------------------------------
     function humanize (
         a_dsinterval interval day to second
@@ -232,26 +312,28 @@ create or replace package body debug_impl as
         end if;
     end;
 
+    -- save message to dbms_output
     ----------------------------------------------------------------------------
     procedure log_to_dbms_output (
         a_namespace in typ_Namespace,
         a_value     in varchar2,
         a_color     in typ_Color,
+        a_this_tick in timestamp,
         a_diff      in interval day to second
     ) is
     begin
         if use_colors then
             dbms_output.put_line(
                 ' '
-                || color_string(a_namespace, a_color)
+                || apply_color(a_namespace, a_color)
                 || ' '
                 || a_value
                 || ' '
-                || color_string(humanize(a_diff), a_color)
+                || apply_color(humanize(a_diff), a_color)
             );
         else
             dbms_output.put_line(
-                replace(to_char(systimestamp, 'YYYY-MM-DD HH24:MI:SS.FF3'), ' ', 'T')
+                replace(to_char(a_this_tick, 'YYYY-MM-DD HH24:MI:SS.FF3'), ' ', 'T')
                 || ' '
                 || a_namespace
                 || ' '
@@ -260,11 +342,13 @@ create or replace package body debug_impl as
         end if;
     end;
 
+    -- save message to persistent storage
     ----------------------------------------------------------------------------
     procedure log_to_persistent_storage (
         a_namespace in typ_Namespace,
         a_value     in varchar2,
         a_color     in typ_Color,
+        a_this_tick in timestamp,
         a_diff      in interval day to second
     ) is
         pragma autonomous_transaction ;
@@ -277,6 +361,7 @@ create or replace package body debug_impl as
             a_namespace,
             a_value,
             a_color,
+            a_this_tick,
             a_diff
         );
         commit;
@@ -286,22 +371,22 @@ create or replace package body debug_impl as
             raise;
     end;
 
+    -- log messege depending on session - either to table or to dbms_output
     ----------------------------------------------------------------------------
     procedure log (
         a_namespace in typ_Namespace,
         a_value     in varchar2,
         a_color     in typ_Color,
+        a_this_tick in timestamp,
         a_diff      in interval day to second
     ) is
     begin
         if g_session is null then
-            log_to_dbms_output(a_namespace, a_value, a_color, a_diff);
+            log_to_dbms_output(a_namespace, a_value, a_color, a_this_tick, a_diff);
         else
-            log_to_persistent_storage(a_namespace, a_value, a_color, a_diff);
+            log_to_persistent_storage(a_namespace, a_value, a_color, a_this_tick, a_diff);
         end if;
     end;
 
-begin
-    init(FILTER_DEFAULT, COLORS_NO);
 end;
 /

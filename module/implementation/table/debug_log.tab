@@ -4,6 +4,7 @@ create table debug_log (
     namespace        varchar2(4000),
     value            varchar2(4000),
     color            integer,
+    ts_created       timestamp,
     diff             interval day to second (6)
 );
 
