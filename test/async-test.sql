@@ -15,16 +15,20 @@ end;
 
 set serveroutput on size unlimited
 set verify off
+
 set feedback on
+prompt
+prompt .. Joining persistent debug session &&id_debug_session
+set feedback off
 
 begin
     debug.join_persistent(&&id_debug_session);
 end;
 /
 
-prompt
+set feedback on
 prompt .. Running test in debug mode
-rem set feedback off
+set feedback off
 
 declare
   s1 debug := new debug('api');

@@ -17,13 +17,13 @@ create or replace type debug as object
     -- - filter
     --   - like expressions without escape (sorry), separated by ,
     --   - * - all namespaces will be enabled (default)
-    -- - colors - number of colors used in output - 'NO_COLORS' | '16_COLORS' | '256_COLORS' (default is '256_COLORS')
+    -- - colors - number of colors used in output - 'NO_COLORS' | '16_COLORS' | '256_COLORS' (default is 'NO_COLORS')
     --
     -- !!! warning - cannot be watched
     --
     static procedure init_session (
-        filter  in varchar2,
-        colors  in varchar2
+        filter  in varchar2 default '*',
+        colors  in varchar2 default 'NO_COLORS'
     ),
 
     -- initialize debug with persistence into table, so it can be watched online from other session
@@ -35,8 +35,8 @@ create or replace type debug as object
     -- returns session identifier - pass this identifier in debugged session in join_persistent
     --
     static function init_persistent (
-        filter  in varchar2,
-        colors  in varchar2
+        filter  in varchar2 default '*',
+        colors  in varchar2 default 'NO_COLORS'
     ) return integer,
 
     -- join persistent debugging

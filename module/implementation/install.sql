@@ -1,3 +1,6 @@
+prompt .. Creating type DEBUG
+@@../api/type/debug.tps
+
 prompt .. Creating table DEBUG_SESSION
 @@table/debug_session.tab
 
@@ -12,7 +15,9 @@ prompt .. Creating sequence DEBUG_LOG_ID
 
 prompt .. Creating package DEBUG_IMPL
 @@package/debug_impl.pks
+show errors
 
 prompt .. Creating package body DEBUG_IMPL
 @@package/debug_impl.pkb
+show errors
 
