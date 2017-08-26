@@ -2,7 +2,7 @@
 
 Simple PL/SQL debug package (kind a port of JavaScript [debug](https://github.com/visionmedia/debug) package), because sometimes you just want to watch application's flow online.
 
-
+<iframe width="560" height="315" src="https://www.youtube.com/embed/8rg3l4X6ZGM?rel=0" frameborder="0" allowfullscreen></iframe>
 
 # warning - currently tested only from within schema, where it is deployed.
 
@@ -23,7 +23,7 @@ Simple PL/SQL debug package (kind a port of JavaScript [debug](https://github.co
 
 ### init_session
 
-Initializes debug in calling session only. Debug messages are spooled to `DBMS_OUTPUT`.
+Initializes debug in calling session only. Debug messages are spooled to `DBMS_OUTPUT` ->  so you can see them after anonymous block returns.
 
 **Params**
 - **filter**
@@ -32,6 +32,37 @@ Initializes debug in calling session only. Debug messages are spooled to `DBMS_O
 - **colors** - number of colors used in output - `'NO_COLORS'` | `'16_COLORS'` | `'256_COLORS'` (default is `'NO_COLORS'`)
 
 > Warning!!! - Cannot be watched (yet)
+
+```
+exec debug.init_session;
+
+declare
+  s1 debug := new debug('api');
+  b1 debug := new debug('business');
+begin
+    dbms_lock.sleep(dbms_random.value(0, 5));
+    s1.log('call');
+    dbms_lock.sleep(0.01);
+    b1.log('validating input');
+    dbms_lock.sleep(0.1);
+    b1.log('input is valid');
+    dbms_lock.sleep(0.1);
+    b1.log('applying business rule');
+    dbms_lock.sleep(dbms_random.value(0.1, 1));
+    b1.log('commit');
+    dbms_lock.sleep(0.001);
+    s1.log('return');
+end;
+/
+
+2017-05-23T21:20:24.846 api call
+2017-05-23T21:20:24.856 business validating input
+2017-05-23T21:20:24.956 business input is valid
+2017-05-23T21:20:25.055 business applying business rule
+2017-05-23T21:20:25.956 business commit
+2017-05-23T21:20:25.956 api return
+
+```
 
 ### init_persistent
 
