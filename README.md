@@ -2,7 +2,7 @@
 
 Simple PL/SQL debug package (kind a port of JavaScript [debug](https://github.com/visionmedia/debug) package), because sometimes you just want to watch application's flow online.
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/8rg3l4X6ZGM?rel=0" frameborder="0" allowfullscreen></iframe>
+[![](https://img.youtube.com/vi/8rg3l4X6ZGM/0.jpg))](https://www.youtube.com/watch?v=8rg3l4X6ZGM "Watch debug in action on YouTube")
 
 # warning - currently tested only from within schema, where it is deployed.
 
