@@ -1,10 +1,34 @@
 create table debug_session (
     id_debug_session integer not null,
-    filter           varchar2(4000) not null,
-    colors           varchar2(4000) not null
+    id_debug_group   integer not null,
+    sessionid        integer not null,
+    filter           varchar2(4000),
+    paused           varchar2(1) not null check (paused in ('Y','N'))
 );
+
+comment on table debug_session is 'Debug session';
+
+comment on column debug_session.id_debug_session is 'surrogate key';
+comment on column debug_session.id_debug_group is 'debug group referrence';
+comment on column debug_session.sessionid is 'session audit identifier';
+comment on column debug_session.filter is 'debug session namespace filter';
+comment on column debug_session.paused is 'debug session is paused';
 
 alter table debug_session
     add constraint debug_session_pk
     primary key (id_debug_session)
+;
+
+alter table debug_session
+    add constraint debug_session_uk1
+    unique (id_debug_group, sessionId)
+;
+
+alter table debug_session
+    add constraint debug_session_group_fk
+    foreign key (id_debug_group) references debug_group(id_debug_group)
+    on delete cascade
+;
+
+create index debug_session_paused_sessionid on debug_session(paused, sessionid) compress 1
 ;

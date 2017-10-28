@@ -1,2 +1,5 @@
 *.~*
 .idea/
+/module/script/l_id_debug_group.sql
+l_id_debug_group.sql
+

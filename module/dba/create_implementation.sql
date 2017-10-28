@@ -8,4 +8,4 @@ create user &&l_schema_name
 /
 
 prompt Grant schema privileges
-@@grant_schema.sql &&l_schema_name
+@@grant_schema_&&l_environment..sql &&l_schema_name

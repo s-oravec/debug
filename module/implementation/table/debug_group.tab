@@ -1,0 +1,18 @@
+create table debug_group (
+    id_debug_group integer not null,
+    description    varchar2(255) not null,
+    filter         varchar2(4000) not null,
+    paused         varchar2(1) not null check (paused in ('Y','N'))
+);
+
+comment on table debug_group is 'Debug group';
+
+comment on column debug_group.id_debug_group is 'surrogate key';
+comment on column debug_group.description is 'debug group description';
+comment on column debug_group.filter is 'debug group namespace filter';
+comment on column debug_group.paused is 'debug group is paused';
+
+alter table debug_group
+    add constraint debug_group_pk
+    primary key (id_debug_group)
+;

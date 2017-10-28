@@ -6,3 +6,4 @@ undefine g_schema_name
 undefine g_schema_pwd
 undefine g_schema_tbspc
 undefine g_temp_tbspc
+undefine g_run_identifier

@@ -1,12 +1,22 @@
 create table debug_log (
     id_debug_log     integer not null,
+    id_debug_group   integer not null,
     id_debug_session integer not null,
     namespace        varchar2(4000),
     value            varchar2(4000),
-    color            integer,
     ts_created       timestamp,
-    diff             interval day to second (6)
+    diff             interval day (9) to second (6)
 );
+
+comment on table debug_log is 'debug log';
+
+comment on column debug_log.id_debug_log is 'surrogate key';
+comment on column debug_log.id_debug_group is 'debug group identifier';
+comment on column debug_log.id_debug_session is 'debug session identifier';
+comment on column debug_log.namespace is 'debug namespace';
+comment on column debug_log.value is 'debug message';
+comment on column debug_log.ts_created is 'timestamp when logged';
+comment on column debug_log.diff is 'diff from last log in same namespace';
 
 alter table debug_log
     add constraint debug_log_pk
@@ -14,9 +24,10 @@ alter table debug_log
 ;
 
 alter table debug_log
-    add constraint debug_log_session_fk
-    foreign key (id_debug_session) references debug_session(id_debug_session)
+    add constraint debug_log_group_fk
+    foreign key (id_debug_group) references debug_group(id_debug_group)
+    on delete cascade
 ;
 
-create index debug_log_session_fk on debug_log(id_debug_session)
+create index debug_log_group_fk on debug_log(id_debug_group)
 ;

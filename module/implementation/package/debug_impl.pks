@@ -1,56 +1,56 @@
 create or replace package debug_impl as
 
-    subtype typ_CharBool is varchar2 (1);
-    CHARBOOL_TRUE  constant typ_CharBool := 'Y';
-    CHARBOOL_FALSE constant typ_CharBool := 'N';
+    -- admin methods
+    function create_group (
+        a_filter      in debug_types.typ_Filter default debug_types.ALL_NAMESPACES,
+        a_description in debug_types.typ_Description default debug_types.DESCRIPTION_NONE
+    ) return debug_types.typ_DebugGroupId;
 
-    subtype typ_Colors is varchar2(30);
-    subtype typ_Color  is pls_integer;
-
-    COLORS_NO  constant typ_Colors := 'NO_COLORS';
-    COLORS_16  constant typ_Colors := '16_COLORS';
-    COLORS_256 constant typ_Colors := '256_COLORS';
-
-    subtype typ_Filter is varchar2(4000);
-
-    FILTER_ALL_NAMESPACES constant typ_Filter := '*';
-    FILTER_DEFAULT constant typ_Filter := '';
-
-    subtype typ_Namespace is varchar2(4000);
-
-    procedure init_session (
-        a_filter  in typ_Filter,
-        a_colors  in typ_Colors
+    procedure drop_group (
+        a_id_debug_group in debug_types.typ_DebugGroupId
     );
 
-    function init_persistent (
-        a_filter  in typ_Filter,
-        a_colors  in typ_Colors
-    ) return debug_session.id_debug_session%type;
+    procedure debug_this (
+        a_id_debug_group in debug_types.typ_DebugGroupId default null,
+        a_filter         in debug_types.typ_Filter default debug_types.ALL_NAMESPACES,
+        a_colors         in debug_types.typ_Colors default debug_types.COLORS_NO
+    );
 
-    procedure join_persistent (
-        a_id_debug_session in debug_session.id_debug_session%type
+    procedure debug_other (
+        a_id_debug_group in debug_types.typ_DebugGroupId,
+        a_sessionId      in debug_types.typ_SessionId,
+        a_filter         in debug_types.typ_Filter default debug_types.ALL_NAMESPACES
+    );
+
+    procedure pause_debug (
+        a_id_debug_group in debug_types.typ_DebugGroupId default null,
+        a_sessionId      in debug_types.typ_SessionId default null
+    );
+
+    procedure resume_debug (
+        a_id_debug_group in debug_types.typ_DebugGroupId default null,
+        a_sessionId      in debug_types.typ_SessionId default null
     );
 
     procedure set_filter (
-        a_filter           in typ_Filter,
-        a_id_debug_session in debug_session.id_debug_session%type default null
+        a_filter         in debug_types.typ_Filter,
+        a_id_debug_group in debug_types.typ_DebugGroupId default null,
+        a_sessionId      in debug_types.typ_SessionId default null
     );
 
-    procedure register_debug_object (
-        a_debug in debug
+    procedure purge_log (
+        a_id_debug_group in debug_types.typ_DebugGroupId default null,
+        a_sessionId      in debug_types.typ_SessionId default null
     );
 
     function is_enabled (
-        a_namespace in typ_Namespace
-    ) return typ_CharBool;
-
-    function select_color(a_namespace in typ_Namespace) return typ_Color;
+        a_sessionId in debug_types.typ_SessionId,
+        a_namespace in debug_types.typ_Namespace
+    ) return debug_types.typ_CharBool;
 
     procedure log (
-        a_namespace in typ_Namespace,
-        a_value     in varchar2,
-        a_color     in typ_Color,
+        a_namespace in debug_types.typ_Namespace,
+        a_value     in debug_types.typ_LogValue,
         a_this_tick in timestamp,
         a_diff      in interval day to second
     );

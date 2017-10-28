@@ -1,5 +1,5 @@
-accept id_debug_session prompt ">>> Enter session identifier: "
-define iterations = 2
+define debug_group = &1
+define iterations  = 2
 
 set feedback off
 
@@ -18,16 +18,16 @@ set verify off
 
 set feedback on
 prompt
-prompt .. Joining persistent debug session &&id_debug_session
+prompt .. Joining debug group &&debug_group
 set feedback off
 
 begin
-    debug.join_persistent(&&id_debug_session);
+    debug_adm.debug_this(&&debug_group);
 end;
 /
 
 set feedback on
-prompt .. Running test in debug mode
+prompt Running test in debug mode
 set feedback off
 
 declare

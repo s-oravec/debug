@@ -15,6 +15,12 @@ define l_privileges = "&1"
 rem Load package
 @@package.sql
 
+rem init SQL*Plus settings
+@sqlplus_init.sql
+
+prompt Installing API type DEBUG
+@module/api/type/debug.tps
+
 prompt Installing package Implementation
 @module/implementation/install.sql
 
@@ -24,19 +30,8 @@ prompt Installing package API
 prompt Granting privileges on package API
 @module/api/grant_&&l_privileges..sql
 
-prompt Selecting errors in &&g_current_schema schema
-
-set lines 200
-column location format a40
-column text     format a60 word_wrapped
-
-set feedback on
-select owner || '.' || name as location, text
-  from all_errors
- where owner = upper('&&g_current_schema')
- order by 1, sequence, line, position
-;
-set feedback off
+rem finalize SQL*Plus
+@@sqlplus_finalize.sql
 
 rem undefine locals
 undefine l_privileges
