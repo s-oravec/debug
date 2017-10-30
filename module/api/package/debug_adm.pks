@@ -40,7 +40,7 @@ create or replace package debug_adm as
     --
     -- params
     --
-    -- - filter      - see init_session
+    -- - filter      - see debug_this
     -- - description - some description (optional)
     --
     -- returns debug group identifier
@@ -79,8 +79,12 @@ create or replace package debug_adm as
     -- - filter
     --   - like expressions without escape (sorry), separated by ,
     --   - * - all namespaces will be enabled (default)
-    --
+    -- - colors - colors settings for namespace "coloring" in ANSI terminals. Use debug_format.COLORS_NO if your terminal does not support ANSI colors
+    --   - debug_format.COLORS_NO - no colors
+    --   - debug_format.COLORS_16 - 16 colors
+    --   - debug_format.COLORS_256 - 256 colors
     */
+    -- TODO: test colors in SQL*Plus
     procedure debug_this (
         debug_group in debug_group_identifier_type default null,
         filter      in filter_type default ALL_NAMESPACES,
@@ -94,6 +98,7 @@ create or replace package debug_adm as
     --
     -- - debug_group - debug group identifier - see create_group
     -- - sessionId = sys_context('userenv','sessionId') = v$session.audsid
+    -- - filter -
     --
     */
     procedure debug_other (
@@ -135,7 +140,7 @@ create or replace package debug_adm as
     --
     -- params
     --
-    -- - filter
+    -- - filter - see debug_this
     -- - debug_group - for all sessions in debug_session
     -- - sessionId - only for session identified by sessionId
     --

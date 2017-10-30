@@ -3,3 +3,6 @@ grant execute on debug to public;
 
 prompt .. Granting EXECUTE on debug_adm package to PUBLIC
 grant execute on debug_adm to public;
+
+prompt .. Granting EXECUTE on debug_format package to PUBLIC
+grant execute on debug_format to public;
